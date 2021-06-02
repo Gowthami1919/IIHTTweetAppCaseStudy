@@ -1,29 +1,29 @@
 ﻿using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Cosmos;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using TweetApp.Repository.TweetAppEntity;
+using TweetApp.Service.TweetAppEntity;
 using TweetApp.Service;
 
 namespace TweetApp
 {
-    //[EnableCors("MODPolicy")]
     [ApiController]
     [Produces("application/json")]
     public class UserController : ControllerBase
     {
-        private readonly ITweetService service;
-
+        private readonly ITweetCosmoDBService _cosmosDbService;
+       
         /// <summary>
         /// create the object of usercontroller.
         /// </summary>
         /// <param name="service">service dependenc injection.</param>
-        public UserController(ITweetService service)
+        public UserController(ITweetCosmoDBService cosmoDbService)
         {
-            this.service = service;
+            _cosmosDbService = cosmoDbService ?? throw new ArgumentNullException(nameof(cosmoDbService));
         }
 
         /// <summary>
@@ -32,17 +32,21 @@ namespace TweetApp
         /// <param name="userId">based on userId.</param>
         /// <param name="password">based on password</param>
         /// <returns>returns the status message.</returns>
-        
+
         [Route("UserLogin/{userId}/{password}")]
         [HttpGet]
-        public User UserLogin(string userId, string password)
+        public Service.TweetAppEntity.User UserLogin(string userId, string password)
         {
             try
             {
-                if (!string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(password))
+               if(userId!=null && password != null)
                 {
-                    var user = this.service.UserLogin(userId, password);
-                    return user;
+                    var result = this._cosmosDbService.UserLogin(userId, password);
+                    if(result != null)
+                    {
+                        return result.Result;
+                    }
+
                 }
             }
 
@@ -62,14 +66,15 @@ namespace TweetApp
         /// <returns>returns the status message of user register.</returns>
         [Route("UserRegister")]
         [HttpPost]
-        public IActionResult UserRegister([FromBody] User userRegistration)
+        public IActionResult UserRegister([FromBody] Service.TweetAppEntity.User userRegistration)
         {
             try
             {
                 if (userRegistration != null)
                 {
-                    var statusMessage = this.service.UserRegistration(userRegistration);
-                    return Ok(new { status = statusMessage });
+                    userRegistration.Id = Guid.NewGuid().ToString();
+                     _cosmosDbService.UserRegister(userRegistration);
+                    return Ok(" inserted ");
                 }
             }
             catch (TweetException ex)
@@ -87,14 +92,16 @@ namespace TweetApp
         {
             try
             {               
-                    var statusMessage = this.service.UserExists(emailId);
-                if (!string.IsNullOrEmpty(statusMessage)) 
-                { 
-                    return statusMessage; 
+                 if(emailId != null)
+                {
+                    var result = this._cosmosDbService.UserExists(emailId);
+                    if(result.Result != null)
+                    {
+                        return Messages.UserExists;
+                    }
                 }
-                return null;
-                    
-                
+
+                return Messages.UserDoesNotExists;
             }
             catch (TweetException ex)
             {
@@ -119,11 +126,11 @@ namespace TweetApp
                 if (!string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(newPassword))
                 {
 
-                    var result = this.service.UpdatePassword(userId, oldpassword, newPassword);
-                    if (result == true)
+                    var result = this._cosmosDbService.PasswordUpdate(userId, oldpassword, newPassword);
+                    return Ok(new
                     {
-                        return Ok(new { status = Messages.PasswordUpdated });
-                    }
+                        status = Messages.PasswordUpdated
+                    });;
 
                 }
             }
@@ -148,8 +155,12 @@ namespace TweetApp
             {
                 if (!string.IsNullOrEmpty(emailId))
                 {
-                    var result = this.service.ForgotPasswordEmailId(emailId);
-                    return Ok(new { status = result });
+                    var result = this._cosmosDbService.UserExists(emailId);
+                    if (result.Result != null)
+                    {
+                        return Ok(new { status = Messages.UserExists });
+                    }
+                    
 
                 }
             }
@@ -175,8 +186,10 @@ namespace TweetApp
             {
                 if (!string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(newPassword))
                 {
-                    var result = this.service.ForgotPassword(userId, newPassword);
-                    return Ok(new { status = result });
+                    var result = this._cosmosDbService.ForgotPassword(userId, newPassword);
+                    
+
+                    return Ok(new { status = Messages.PasswordUpdated });
 
                 }
             }

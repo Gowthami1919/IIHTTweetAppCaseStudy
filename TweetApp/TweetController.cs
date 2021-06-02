@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using TweetApp.Repository.TweetAppEntity;
+using TweetApp.Service.TweetAppEntity;
 using TweetApp.Service;
 
 namespace TweetApp
@@ -15,16 +15,14 @@ namespace TweetApp
     [Produces("application/json")]
     public class TweetController : ControllerBase
     {
-        private readonly ITweetService service;
-
+        private readonly ITweetCosmosService _cosmosDbService;
         /// <summary>
         /// Create the instance of the tweetController.
         /// </summary>
         /// <param name="service">service.</param>
-        public TweetController(ITweetService service)
+        public TweetController(ITweetCosmosService cosmoDbService)
         {
-
-            this.service = service;
+            _cosmosDbService = cosmoDbService ?? throw new ArgumentNullException(nameof(cosmoDbService));
         }
 
         /// <summary>
@@ -35,17 +33,18 @@ namespace TweetApp
 
         [Route("AddNewTweet")]
         [HttpPost]
-        public IActionResult AddNewTweet([FromBody]Tweet tweet)
+        public IActionResult AddNewTweet([FromBody]Tweets tweet)
         {
-            string message = null;
             try
             {
                 if (tweet != null)
                 {
-                    message = this.service.AddNewTweet(tweet);
+                    tweet.TweetId = Guid.NewGuid().ToString();
+                    this._cosmosDbService.AddNewPost(tweet);
+                    return Ok(new { status = Messages.TweetAdded });
                 }
-                return Ok(new { status = message });
 
+                return Ok(new { status = Messages.TweetNotAdded });
             }
             catch (TweetException ex)
             {
@@ -60,14 +59,14 @@ namespace TweetApp
         /// <returns>returns all the user tweets.</returns>
         [Route("ViewUserAllTweets/{userId}")]
         [HttpGet]
-        public List<TweetsandUsers> ViewUserAllTweets(string userId)
+        public async Task<IActionResult> ViewUserAllTweets(string userId)
         {
             try
             {
                 if (!string.IsNullOrEmpty(userId))
                 {
-                    var tweets = this.service.GetUserTweets(userId);
-                    return tweets;
+                    var tweets = await this._cosmosDbService.GetUserTweets(userId);
+                    return Ok(tweets);
                 }
                 return null;
             }
@@ -86,14 +85,14 @@ namespace TweetApp
         /// <returns>returns all the user tweets.</returns>
         [Route("ViewOtherUsersAllTweets/{userId}")]
         [HttpGet]
-        public List<TweetsandUsers> ViewOtherUsersAllTweets(string userId)
+        public async Task<IActionResult> ViewOtherUsersAllTweets(string userId)
         {
             try
             {
                 if (!string.IsNullOrEmpty(userId))
                 {
-                    var tweets = this.service.GetOtherUsersTweets(userId);
-                    return tweets;
+                    var tweets = await this._cosmosDbService.GetOtherAllUserTweets(userId);
+                    return Ok(tweets);
                 }
                 return null;
             }
@@ -104,100 +103,5 @@ namespace TweetApp
 
 
         }
-
-        /// <summary>
-        /// Get all the users list.
-        /// </summary>
-        /// <returns>returns all the users.</returns>
-        [Route("GetAllUserList")]
-        [HttpGet()]
-        public List<AllUsers> GetAllUserList()
-        {
-            try
-            {
-                var userList = this.service.AllUserList();
-                return userList;
-            }
-            catch (TweetException ex)
-            {
-                throw new TweetException("error occurred at get all user List" + ex.Message);
-            }
-        }
-
-        [Route("GetAllUserandTweetList")]
-        [HttpGet]
-        public List<TweetsandUsers> GetAllUserandTweetList()
-        {
-            try
-            {
-                var userList = this.service.GetUserandTweetList();
-                return userList;
-            }
-            catch (TweetException ex)
-            {
-                throw new TweetException("error occurred at get all user List" + ex.Message);
-            }
-        }
-
-        [Route("TweetLike/{tweetId}/{userId}")]
-        [HttpGet]
-        public List<TweetsandUsers> TweetLikes(int tweetId, string userId)
-        {
-            try
-            {
-                var tweet = this.service.GetLikes(tweetId, userId);
-                return tweet;
-            }
-            catch (TweetException ex)
-            {
-                throw new TweetException("error occurred at TweetLikes" + ex.Message);
-            }
-        }
-
-        [Route("TweetDisLike/{tweetId}")]
-        [HttpGet]
-        public List<TweetsandUsers> TweetDisLikes(int tweetId, string userId)
-        {
-            try
-            {
-                var count = this.service.GetDisLikes(tweetId);
-                return count;
-            }
-            catch (TweetException ex)
-            {
-                throw new TweetException("error occurred at TweetDisLikes" + ex.Message);
-            }
-        }
-
-        [Route("getTweetComments/{tweetId}")]
-        [HttpGet]
-        public List<CommentsOnTweet> GetTweetComments(int tweetId)
-        {
-            try
-            {
-                var count = this.service.GetTweetComments(tweetId);
-                return count;
-            }
-            catch (TweetException ex)
-            {
-                throw new TweetException("error occurred at GetTweetComments" + ex.Message);
-            }
-        }
-
-        [Route("addTweetComments/{tweetId}")]
-        [HttpPost]
-        public bool AddTweetComments([FromBody] Repository.TweetAppEntity.AddTweetComments comments,int tweetId)
-        {
-            try
-            {
-                var status = this.service.AddTweetComment(comments,tweetId);
-                return status;
-            }
-            catch (TweetException ex)
-            {
-                throw new TweetException("error occurred at AddTweetComments" + ex.Message);
-            }
-        }
-
     }
 }
